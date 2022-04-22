@@ -21,7 +21,7 @@ module.exports = {
     async _getTipos(min) {
         const minId = min 
         ? `where tipo_id > ${min} ` : '' 
-        const pool = db.pool
+        const pool = await db.pool
         let conn;
         let result = []
         try {
@@ -56,7 +56,7 @@ module.exports = {
         
         let minId = min ? `where ingr_id > ${min} ` : '' 
         minId = id ? `where ingr_id = ${id} ` : minId
-        const pool = db.pool
+        const pool = await db.pool
         let conn;
         let result = []
         try {
@@ -90,7 +90,7 @@ module.exports = {
     async _getSabores(min) {
         const minId = min 
         ? `where sabor_id > ${min} ` : '' 
-        const pool = db.pool
+        const pool = await db.pool
         let conn;
         let result = []
         try {
@@ -125,7 +125,7 @@ module.exports = {
     async _getTamanhos(min) {
         const minId = min 
         ? `where tam_id > ${min} ` : '' 
-        const pool = db.pool
+        const pool = await db.pool
         let conn;
         let result = []
         try {
@@ -159,7 +159,7 @@ module.exports = {
     async _getValores(min) {
         const minId = min 
         ? `where valor_id > ${min} ` : '' 
-        const pool = db.pool
+        const pool = await db.pool
         let conn;
         let result = []
         try {
@@ -193,7 +193,7 @@ module.exports = {
     async _getBordas(min) {
         const minId = min 
         ? `where borda_id > ${min} ` : '' 
-        const pool = db.pool
+        const pool = await db.pool
         let conn;
         let result = []
         try {
@@ -236,7 +236,7 @@ module.exports = {
     async saveSabor(req, res){
         const sabor = req.body.sabor
         let id = sabor.id
-        const pool = db.pool
+        const pool = await db.pool
         let conn;
         try {
             conn = await pool.getConnection();

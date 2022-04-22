@@ -1,16 +1,28 @@
 const express = require('express');
 const app = express();
-const routes = require('./rotas')
 const cors = require('cors')
+const db = require('./src/database');
+const { getUrls } = require('./src/util/misc');
 
 app.use(express.json())
 app.use(cors())
-app.use(routes)
 
-const ip = require('ip').address('public')
-const protocol = process.env.PROTOCOL || 'http'
-const port = process.env.PORT || '8081'
+async function testDbConnection(){
+    const pool = await db.pool
+    const conexao = pool?.getConnection
+    if(!conexao) throw new Error('Conexão interna falhou.')
+}
 
-app.listen(port, () => {
-    console.log(`servidor ON em http://localhost:${port} ou ${protocol}://${ip}:${port}`)
+testDbConnection().then((k) => {
+    const routes = require('./rotas')
+    app.use(routes)    
+}).catch(err => {
+    app.get('/*', (req, res) => {
+        res.send(`Falha no servidor! ${err.message} ${err.stack}`)
+    })
+}).finally(() => {    
+    const {localUrl, staticUrl, port} = getUrls()
+    app.listen(port, () => {
+        console.log(`servidor ON em ${localUrl} ou ${staticUrl}`)
+    })
 })

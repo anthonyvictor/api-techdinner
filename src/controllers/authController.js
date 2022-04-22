@@ -8,7 +8,7 @@ const users = [
         phone: '71 982261684', 
         enterprise: 'Pizzaria Delicia da Bahia',
         post: 'admin', 
-        password: 'ondina01'
+        password: 'asenha159'
     },
     
     
@@ -27,7 +27,12 @@ const users = [
         username: 'thonny',
         email: 'thonnyvrc@gmail.com', 
         phone: '71 984479191', 
-        enterprise: 'Pizzaria Delicia da Bahia',
+        enterprise: {
+            name: 'Pizzaria Delicia da Bahia',
+            cnpj: '20434505000171',
+            phoneNumber: '71988726927',
+            address: 'Ladeira do Jardim Zoológico, 427B - Ondina, CEP: 40.170-720'
+        },
         post: 'dev', 
         password: 'asenha159'
     },
@@ -35,7 +40,7 @@ const users = [
 
 module.exports = {
 
-    auth(req, res, callback){
+    auth(req, res){
         let data = req.headers.authorization.split(' ')[1];
         let buff = Buffer.from(data, 'base64');
         let text = buff.toString('utf-8');
@@ -49,11 +54,7 @@ module.exports = {
             ) && u.password === password
             )
             if(found){
-                if(callback){
-                    callback(req, res)
-                }else{
                     res.send({...found, password: password})
-                }
             }else{
                 res.sendStatus(403)
             }
@@ -66,7 +67,7 @@ module.exports = {
     async _getAll(min) {
         // const minId = min 
         // ? `where bebida_id > ${min} ` : '' 
-        // const pool = db.pool
+        // const pool = await db.pool
         // let conn;
         // let result = []
         // try {

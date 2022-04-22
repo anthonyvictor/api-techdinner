@@ -3,7 +3,7 @@ const db = require('../database')
 module.exports = {
     async getAll(req,res){res.send(await this._getAll())},
     async _getAll(){
-        const pool = db.pool
+        const pool = await db.pool
         let conn;
         let result = null
         try {
@@ -32,7 +32,7 @@ module.exports = {
     },
 
     async _getPadrao(){
-        const pool = db.pool
+        const pool = await db.pool
         let conn;
         let result = null
         try {

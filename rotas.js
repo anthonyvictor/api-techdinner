@@ -8,12 +8,15 @@ const entregadoresController = require('./src/controllers/entregadoresController
 const outrosController = require('./src/controllers/outrosController')
 const pedidosController = require('./src/controllers/pedidosController')
 const pizzasController = require('./src/controllers/pizzasController')
+const misc = require('./src/util/misc')
 
 router.post('/', cors(), (req,res)=> res.json({ success: true }))
 router.get('/clientes', (req, res) => clientesController.getAll(req, res))
 router.get('/clientes/imagens', (req, res) => clientesController.getImages(req, res))
 router.post('/clientes/salvar', (req, res) => clientesController.save(req, res))
 router.delete('/clientes/excluir', (req, res) => clientesController.delete(req, res))
+router.get('/clientes/pagamento/costumeultimo', (req,res) => clientesController.getCostumeUltimoPagamento(req, res))
+router.get('/clientes/pagamento/ultimos', (req,res) => clientesController.getUltimosPagamentos(req, res))
 
 router.get('/enderecos', (req, res) => enderecosController.getAll(req, res))
 router.get('/taxa', (req, res) => enderecosController.getTaxaOriginal(req, res))
@@ -28,6 +31,7 @@ router.get('/outros', (req, res) => outrosController.getAll(req, res))
 router.post('/outros/salvar', (req, res) => outrosController.save(req, res))
 
 router.get('/pedidos', (req,res) => pedidosController.getAndamento(req, res))
+router.post('/pedidos/novo', (req,res) => pedidosController.novoPedido(req, res))
 router.get('/pedidos/checkupdates', (req,res) => pedidosController.getInfoToCheckBeforeUpdate(req, res))
 router.post('/pedidos/update/cliente', (req,res) => pedidosController.updateCliente(req, res))
 router.post('/pedidos/update/tipo', (req,res) => pedidosController.updateTipo(req, res))
@@ -39,18 +43,26 @@ router.post('/pedidos/update/item', (req,res) => pedidosController.updateItem(re
 router.post('/pedidos/update/item/copy', (req,res) => pedidosController.copyItem(req, res))
 router.delete('/pedidos/update/item/delete', (req,res) => pedidosController.deleteItem(req, res))
 router.post('/pedidos/update/pagamento', (req,res) => pedidosController.updatePagamento(req, res))
+router.post('/pedidos/update/observacoes', (req,res) => pedidosController.updateObservacoes(req, res))
+router.put('/pedidos/cancelar', (req,res) => pedidosController.cancelar(req, res))
+router.put('/pedidos/finalizar', (req,res) => pedidosController.finalizar(req, res))
+router.get('/relatorios', (req,res) => pedidosController.getRelatorios(req, res))
 
 router.get('/entregadores/padrao', (req,res) => entregadoresController.getPadrao(req, res))
 router.get('/entregadores', (req,res) => entregadoresController.getAll(req, res))
 
 router.get('/auth', (req, res) => authController.auth(req, res)) 
 
+const express = require('express')
+router.use('/static', express.static(__dirname + '/src/images'));
+
+
 clientesController._getAll()
 enderecosController._getAll()
 pizzasController._getAll()
 bebidasController._getAll()
 outrosController._getAll()
-pedidosController._getAndamento()
 authController._getAll()
+pedidosController.refreshAndamento()
 
 module.exports = router

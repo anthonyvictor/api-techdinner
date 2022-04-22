@@ -19,7 +19,7 @@ module.exports = {
       : cep > 0
       ? `where end_cep = ${cep} `
       : "";
-    const pool = db.pool;
+    const pool = await db.pool;
     let conn;
     let result = [];
     try {
@@ -74,7 +74,7 @@ module.exports = {
     const where = min 
     ? `where ponto_id > ${min} ` 
     : id ? `where ponto_id = ${id} ` : ""
-    const pool = db.pool;
+    const pool = await db.pool;
     let conn;
     let result = [];
     try {
@@ -130,7 +130,7 @@ module.exports = {
 
   async _getBairros(min) {
     const minId = min ? `where bai_id > ${min} ` : "";
-    const pool = db.pool;
+    const pool = await db.pool;
     let conn;
     let result = [];
     try {
@@ -180,7 +180,7 @@ module.exports = {
     try {
         conn = await pool.getConnection();
         let str = ''
-        const pool = db.pool;
+        const pool = await db.pool;
         let conn;
         let data = []
 

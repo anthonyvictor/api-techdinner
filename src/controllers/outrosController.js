@@ -1,5 +1,6 @@
 const db = require('../database')
 const { base64ToBlob } = require('../util/format')
+const { getImageUrl } = require('../util/misc')
 
 module.exports = {
     outros: [],
@@ -9,7 +10,7 @@ module.exports = {
     async _getAll(min) {
         const minId = min 
         ? `where outro_id > ${min} ` : '' 
-        const pool = db.pool
+        const pool = await db.pool
         let conn;
         let result = []
         try {
@@ -19,10 +20,12 @@ module.exports = {
             + minId
             + 'limit 10'
         );
-        result = rows.map(e=> {return {
+        result = rows.map(e=> {
+            const imagem = getImageUrl({ type: 'outros', id: e.outro_id })
+            return {
             id: e.outro_id,
             nome: e.outro_desc,
-            imagem: e.outro_img,
+            imagem,
             valor: e.outro_valor,
             ativo: e.outro_ativo,
             visivel: e.outro_visivel,
@@ -65,7 +68,7 @@ module.exports = {
 
                 index = 'outro_id',
 
-                columns = `outro_desc, outro_valor, outro_img, 
+                columns = `outro_desc, outro_valor, 
                 outro_qtd, outro_ativo, outro_visivel`
 
             if(tipoPost === 'ativo'){
@@ -99,7 +102,8 @@ module.exports = {
                     this.outros = [...newArray, newItem]
                 }
 
-                res.send({...outro, id: id})
+
+                res.send({...outro, id})
             }else{
                 throw new Error(e)
             }

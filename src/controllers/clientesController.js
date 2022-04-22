@@ -1,6 +1,9 @@
+const path = require('path')
 const db = require('../database')
 const { base64ToBlob, blobStringToBlob } = require('../util/format')
+const { getImageUrl } = require('../util/misc')
 const { _getEnderecos } = require('./enderecosController')
+
 //const fs = require('fs')
 
 // async function blobToImg(data){
@@ -25,26 +28,25 @@ module.exports = {
 
     async getAll(req, res){
         if(req?.query?.id){
-            let img = await this._getImages([req.query.id])
             res.send(
                 {
-                    ...this.clientes.filter(e => e.id === Number(req.query.id))[0], 
-                    imagem: (img[0]?.imagem)
+                    ...this.clientes.filter(e => e.id === Number(req.query.id))[0]
                 }
             )
         }else{
             res.send(this.clientes)
         }
     },
-
+    count: 0,
     async _getAll(getBy=null, id=null) {
         let where = ''
         if(getBy === 'min'){
             where = `where cli_id > ${id} `
         }else if(getBy === 'id'){
             where = `where cli_id = ${id} `
+            if(!id) return {}
         }
-        const pool = db.pool
+        const pool = await db.pool
         let conn;
         let result = []
         try {
@@ -73,10 +75,14 @@ module.exports = {
           + "order by cli.cli_id asc "
           + 'limit 50'
           );
+
           result = await Promise.all(rows.map(async e => {
+            
+            const img = getImageUrl({type: 'clientes', id: e.id})
             return {
                 id: e.id,
                 nome: e.nome, 
+                imagem: img,
                 contato: (e.contato ? e.contato.split(',') : []),
                 tags: (e.tags ? e.tags.split(',') : []),
                 endereco: (!e.cep ? null : {
@@ -108,7 +114,9 @@ module.exports = {
 
 
             if(getBy === 'id'){
-                return result[0]
+                const r = result[0] 
+                // console.log('id:',id,'result',r)
+                return r
             }else if(getBy === 'min'){
                 this.clientes = [...this.clientes, ...result]
             }else{
@@ -127,7 +135,7 @@ module.exports = {
 
       async _getEndereco(cliente){
         if(cliente.id){
-                const pool = db.pool
+                const pool = await db.pool
                 let conn;
                 let result = null
                 try {
@@ -158,35 +166,10 @@ module.exports = {
         }else{return null}
       },
 
-    async getImages(req, res) {
-        if(req.query.ids){
-            res.send(await this._getImages(req.query.ids))
-        }
-    
-    },
-
-    async _getImages(ids) {
-        return []
-            // const pool = db.pool
-            // let conn;
-            // try {
-            //     conn = await pool.getConnection();
-            //     const rows = await conn.query(
-            //         "SELECT cli_id as id, image as imagem from tbl_cad_cli_img "
-            //     + `where cli_id in (${ids.join(', ')})`
-            //     );
-            //     return rows
-            // } catch (err) {
-            //     return []
-            // } finally {
-            //     if (conn) conn.end();
-            // }    
-    },
-
     async delete(req, res){
         const id = req.body.id
         if(id){
-            const pool = db.pool
+            const pool = await db.pool
             let conn;
             try {
                 conn = await pool.getConnection();
@@ -209,10 +192,110 @@ module.exports = {
         }
     },
 
+    async getCostumeUltimoPagamento(req, res){
+        if(!req?.query?.cliente) {
+            res.send(null)
+            return
+        }
+        const cliente = JSON.parse(req?.query?.cliente)
+        
+        const pool = await db.pool
+        let conn;
+        let result = 4
+        try {
+          conn = await pool.getConnection();
+          
+          let tempSelect = `
+                SELECT 
+                    CASE 
+                        WHEN pag.pag_tipo = 0 THEN 'em espécie' 
+                        WHEN pag.pag_tipo = 1 THEN 'no cartão' 
+                        WHEN pag.pag_tipo = 2 THEN 'via PIX' 
+                        WHEN pag.pag_tipo = 3 THEN 'por transferência bancária' 
+                    END
+            `
+            let tempFrom = `
+                FROM tbl_ped_pag as pag 
+                INNER JOIN tbl_ped as ped using(ped_id) 
+                WHERE ped.cli_id = ${cliente.id} AND ped_status <> 'ANDAMENTO'
+            `
+            const rows = await conn.query(
+                `select costume, ultimo from 
+                (${tempSelect} as costume ${tempFrom} ORDER BY COUNT(pag_tipo) DESC LIMIT 1) as sel1, 
+                (${tempSelect} as ultimo ${tempFrom} ORDER BY ped_data_inic DESC LIMIT 1) as sel2
+            `)
+
+            if(rows?.length > 0){
+                const result = rows.map(e => { return{
+                    costume: e.costume, 
+                    ultimo: e.ultimo, 
+                }})
+                res.send(result[0])
+            }else{
+                res.send(null)
+            }
+
+        } catch (err) {
+            console.error(err, err.stack)
+        } finally {
+            if (conn) conn.end()
+            return result
+        }
+    },
+
+    async getUltimosPagamentos(req, res){
+        if(!req?.query?.cliente) {
+            res.send(null)
+            return
+        }
+        const cliente = JSON.parse(req?.query?.cliente)
+        
+        const pool = await db.pool
+        let conn;
+        let result = []
+        try {
+          conn = await pool.getConnection();
+        
+            const rows = await conn.query(
+                `SELECT 
+                pag_id, pag_tipo, pag_valor, pag_recebido,
+                pag_da, pag_dr, pag_status 
+                FROM tbl_ped_pag as pag 
+                INNER JOIN tbl_ped as ped using(ped_id) 
+                WHERE ped.cli_id = ${cliente.id} 
+                AND ped_status <> 'ANDAMENTO'
+                AND pag_status = 1 
+                ORDER BY pag_da DESC
+                LIMIT 20
+            `)
+
+            if(rows?.length > 0){
+                const result = rows.map(e => { return{
+                    id: e.pag_id,
+                    tipo: e.pag_tipo,
+                    valorPago: e.pag_valor,
+                    valorRecebido: e.pag_recebido,
+                    dataAdicionado: e.pag_da,
+                    dataRecebido: e.pag_dr,
+                    status: e.pag_status
+                }})
+                res.send(result)
+            }else{
+                res.send([])
+            }
+
+        } catch (err) {
+            console.error(err, err.stack)
+        } finally {
+            if (conn) conn.end()
+            return result
+        }
+    },
+
     async save(req, res){
         const cliente = req.body.cliente
         let id = cliente.id
-            const pool = db.pool
+            const pool = await db.pool
             let conn;
             try {
                 conn = await pool.getConnection();
@@ -272,12 +355,7 @@ module.exports = {
                             {...cliente, id: id}
                         ]
                     }
-                    
-                    // if(e.data.insertId){
-                    //     clientes = [...this.clientes,     
-                    // }else{
-                        
-                    // }
+                
 
                     res.send({...cliente, id: id})
                 }else{
