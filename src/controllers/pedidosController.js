@@ -160,7 +160,8 @@ module.exports = {
         try{
             const novo = await this._novoPedido({id: req.body?.cliente?.id, nome: req.body?.cliente?.nome})
             res.send(novo)
-        }catch{
+        }catch(err){
+            console.error(err, err.stack)
             res.send(null)
         }
     },
@@ -687,50 +688,7 @@ module.exports = {
         }
     },
 
-    async duplicar(req, res) {
-        try{
-            const { pedido } = req.body
-            let r = await this._duplicar(pedido)
-            if(!r) throw new Error('BadGateway')
-            await this.refreshAndamento()
-            res.send(this.andamento.find(e => e.id === r.id))
-        }catch(err){
-            if(err.message === 'BadGateway'){
-                res.sendStatus(503)
-            }else if(err.message === 'BadRequest'){
-                res.sendStatus(403)
-            }else{
-                res.sendStatus(500)
-            }
-
-        }
-    },
-
-    async _duplicar(pedido) {
-        const pool = await db.pool
-        let conn
-        let data = []
-        try {
-            conn = await pool.getConnection()
-            const original = (await this._getPedidos({ids: [pedido.id]}))[0]
-            let novoPedido = await this._novoPedido()
-            novoPedido = await this._updateCliente(novoPedido, original.cliente)
-            novoPedido = await this._updateEndereco(novoPedido, original.endereco)
-            novoPedido = await this._updateObservacoes(novoPedido, novoPedido.observacoes)
-            
-            // await Promise.all(
-                // original.itens.map(async (e) => {novoPedido = await this._updateItem(novoPedido, {...e, id: null})})
-                original.itens.map((e) => this._updateItem(novoPedido, {...e, id: null}).then(e => novoPedido = e))
-            // )
-            return novoPedido
-        } catch (err) {
-            console.error(err, err.stack)
-            return null
-        } finally {
-            if (conn) conn.end()
-        }
-    },
-
+    
     async updateEntregador(req, res) {
         const pedido = req.body?.pedido
         const novoEntregador = req.body?.novoEntregador
@@ -820,7 +778,7 @@ module.exports = {
                     `where cli_id = ${cliente.id}`
             )
             const res = rows[0]
-
+            
             result = (res.peds === 1 && res.cep !== 0) || res.entr > res.cx ? 1 : 0
         } catch (err) {
             console.error(err, err.stack)
@@ -829,7 +787,7 @@ module.exports = {
             return result
         }
     },
-
+    
     async updateItem(req, res) {
         const pedido = req.body?.pedido
         const novoItem = req.body?.novoItem
@@ -846,7 +804,7 @@ module.exports = {
             let conn
             try {
                 conn = await pool.getConnection()
-
+                
                 let data = [
                     pedido.id || null,
                     novoItem.tipo,
@@ -857,7 +815,7 @@ module.exports = {
 
                 const str =
                     novoItem.id > 0
-                        ? 'update tbl_ped_itens set ' +
+                    ? 'update tbl_ped_itens set ' +
                           'ped_id=?, item_tipo=?, item_desc=?, ' +
                           'item_valor=?, item_obs=? ' +
                           `where item_id = ${novoItem.id}`
@@ -932,9 +890,9 @@ module.exports = {
                     item.valor || null,
                     item?.observacoes?.toUpperCase() || null,
                 ]
-
+                
                 const str = `insert into tbl_ped_itens 
-                    (ped_id, item_tipo, item_desc, 
+                (ped_id, item_tipo, item_desc, 
                     item_valor, item_obs) 
                     values (?,?,?,?,?) `
 
@@ -943,7 +901,7 @@ module.exports = {
                     const e = await conn.query(str, data)
                     if (e.insertId > 0) ids.push(e.insertId)
                 }
-
+                
                 if (ids.length > 0) {
                     if (item.tipo === 0) {
                         for (let i of ids) {
@@ -963,7 +921,7 @@ module.exports = {
                                         'sabor_desc, sabor_ingr) ' +
                                         'values (?,?,?,?,?)',
                                     data
-                                )
+                                    )
                             }
                         }
                     } else if (item.tipo === 2) {
@@ -1021,6 +979,7 @@ module.exports = {
                 res.send(this.andamento.filter(a => a.id === novoPedido.id)[0])
             }
         } catch (err) {
+            console.error(err, err.stack)
             res.send(null)
         }
     },
@@ -1032,17 +991,17 @@ module.exports = {
             try {
                 conn = await pool.getConnection()
                 const getValores = pags => pags.reduce((max, current) => max + (current?.valorPago || 0), 0)
-
+                
                 const valorNovosPagamentos = getValores(novosPagamentos)
                 const valorAntigosPagamentos = getValores(
                     this.andamento.find(e => e.id === pedido.id)?.pagamentos || []
-                )
+                    )
                 const valorExcluido = pagamentoAntigo?.valorPago || 0
 
                 if (valorNovosPagamentos + valorAntigosPagamentos - valorExcluido > pedido.valor) {
                     throw new Error('Pagamentos excedem valor do pedido!')
                 }
-
+                
                 if (pagamentoAntigo && isNaN(pagamentoAntigo.id)) {
                     throw new Error('Erro. Pagamento incorreto!')
                 }
@@ -1061,7 +1020,7 @@ module.exports = {
 
                     const str = `DELETE FROM tbl_ped_pag 
                         WHERE ped_id = ${pedido.id}`
-                    await conn.query(str)
+                        await conn.query(str)
 
                 } else {
                     const novoPagamento = novosPagamentos[0]
@@ -1109,7 +1068,7 @@ module.exports = {
             }
         }
     },
-
+    
     async updateObservacoes(req, res) {
         try {
             const { pedido, novoObservacoes } = req.body
@@ -1119,6 +1078,7 @@ module.exports = {
                 await this.refreshAndamento()
             }
         } catch (err) {
+            console.error(err, err.stack)
             res.send(null)
         }
     },
@@ -1131,9 +1091,9 @@ module.exports = {
                 conn = await pool.getConnection()
 
                 let data = [novoObservacoes ? String(novoObservacoes).toUpperCase() : null]
-
+                
                 const str = `UPDATE tbl_ped SET ped_obs=? WHERE ped_id = ${pedido.id}`
-
+                
                 await conn.query(str, data)
                 pedido.observacoes = String(novoObservacoes).toUpperCase()
             } catch (err) {
@@ -1148,10 +1108,10 @@ module.exports = {
     async cancelar(req, res) {
         try {
             const { pedido } = req.body //motivo
-
+            
             //   if (!motivo || String(motivo).replace(/[\s]+/g, "") === "") {
-            //     throw new Error("BadRequest: Motivo não definido");
-            //   }
+                //     throw new Error("BadRequest: Motivo não definido");
+                //   }
 
             if (!pedido || !pedido.id) {
                 throw new Error('BadRequest: Pedido não definido')
@@ -1173,7 +1133,7 @@ module.exports = {
             conn.release()
             str = `DELETE FROM tbl_ped_pag WHERE ped_id = ${pedido.id}`
             await conn.query(str, data)
-
+            
             conn.release()
             str = `DELETE FROM tbl_ped_arq WHERE ped_id = ${pedido.id}`
             await conn.query(str, data)
@@ -1240,7 +1200,7 @@ module.exports = {
             ped_data_fim=?, ped_tipo=?, ped_status=? 
             WHERE ped_id = ${pedido.id}`
             await conn.query(str, data)
-
+            
             conn.release()
             str = `DELETE FROM tbl_ped_arq WHERE ped_id = ${pedido.id}`
             await conn.query(str, data)
@@ -1254,6 +1214,119 @@ module.exports = {
                 res.sendStatus(500)
             }
             console.error(err, err.stack)
+        }
+    },
+    async duplicar(req, res) {
+        try{
+            const { pedido } = req.body
+            let r = await this._duplicar(pedido)
+            if(!r) throw new Error('BadGateway')
+            await this.refreshAndamento()
+            res.send(this.andamento.find(e => e.id === r.id))
+        }catch(err){
+            console.error(err, err.stack)
+            if(err.message === 'BadGateway'){
+                res.sendStatus(503)
+            }else if(err.message === 'BadRequest'){
+                res.sendStatus(403)
+            }else{
+                res.sendStatus(500)
+            }
+    
+        }
+    },
+    
+    async _duplicar(pedido) {
+        try {
+            const original = (await this._getPedidos({ids: [pedido.id]}))[0]
+            let novoPedido = await this._novoPedido()
+            novoPedido = await this._updateCliente(novoPedido, original.cliente)
+            novoPedido = await this._updateEndereco(novoPedido, original.endereco)
+            novoPedido = await this._updateObservacoes(novoPedido, novoPedido.observacoes)
+            original.itens.map((e) => this._updateItem(novoPedido, {...e, id: null}).then(e => novoPedido = e))
+            return novoPedido
+        } catch (err) {
+            console.error(err, err.stack)
+            return null
+        }
+    },
+    async arquivar(req, res) {
+        try{
+            const { pedido, dataFim } = req.body
+            let r = await this._arquivar(pedido, dataFim)
+            if(!r) throw new Error('BadGateway')
+            await this.refreshAndamento()
+            res.send(this.andamento.find(e => e.id === r.id))
+        }catch(err){
+            console.error(err, err.stack)
+            if(err.message === 'BadGateway'){
+                res.sendStatus(503)
+            }else if(err.message === 'BadRequest'){
+                res.sendStatus(403)
+            }else{
+                res.sendStatus(500)
+            }
+    
+        }
+    },
+    
+    async _arquivar(pedido, dataFim) {
+        const pool = await db.pool
+        let conn
+        let data = [
+            pedido.id, dataFim
+        ]
+        try {
+            conn = await pool.getConnection()
+            const res = await conn.query(`
+                INSERT INTO tbl_ped_arq (ped_id, arq_ate) values (?,?)
+            `, data)
+            if(res.insertId){
+                return {...pedido, arq: {pedidoId: pedido.id, dataFim: dataFim}}
+            }else{
+                throw new Error('Failed to insert into database, check for the params')
+            }
+        } catch (err) {
+            console.error(err, err.stack)
+            return null
+        } finally {
+            if (conn) conn.end()
+        }
+    },
+    async desarquivar(req, res) {
+        try{
+            const { pedido } = req.body
+            let r = await this._desarquivar(pedido)
+            if(!r) throw new Error('BadGateway')
+            await this.refreshAndamento()
+            res.send(this.andamento.find(e => e.id === r.id))
+        }catch(err){
+            console.error(err, err.stack)
+            if(err.message === 'BadGateway'){
+                res.sendStatus(503)
+            }else if(err.message === 'BadRequest'){
+                res.sendStatus(403)
+            }else{
+                res.sendStatus(500)
+            }
+    
+        }
+    },
+    
+    async _desarquivar(pedido) {
+        const pool = await db.pool
+        let conn
+        try {
+            conn = await pool.getConnection()
+            const res = await conn.query(`
+                DELETE FROM tbl_ped_arq WHERE ped_id = ${pedido.id}
+            `, data)
+            return pedido
+        } catch (err) {
+            console.error(err, err.stack)
+            return null
+        } finally {
+            if (conn) conn.end()
         }
     },
 }
