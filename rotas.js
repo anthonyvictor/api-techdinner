@@ -10,7 +10,7 @@ const pedidosController = require('./src/controllers/pedidosController')
 const pizzasController = require('./src/controllers/pizzasController')
 const misc = require('./src/util/misc')
 
-router.post('/', cors(), res.json({ success: true }))
+router.post('/', cors(), (req, res) => res.json({ success: true }))
 router.get('/clientes', clientesController.getAll)
 router.get('/clientes/imagens', clientesController.getImages)
 router.post('/clientes/salvar', clientesController.save)
