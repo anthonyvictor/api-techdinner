@@ -1,4 +1,5 @@
 const db = require('../database')
+const { equals } = require('../util/misc')
 const clientesController = require('./clientesController')
 const { _getEndereco, getImages, _getImages } = require('./clientesController')
 const { _getPadrao } = require('./entregadoresController')
@@ -57,7 +58,7 @@ function getTipoNum(tipo) {
 }
 
 function getValorPagamentos(pedido){
-    return !pedido.pagamentos ? 0 : pedido.pagamentos.reduce((a,b) => a + b.valorPago, 0)
+    return !pedido?.pagamentos ? 0 : pedido.pagamentos.reduce((a,b) => a + (Number(b.valorPago) ?? 0), 0)
 }
 
 function getValorPago(pedido){
@@ -97,13 +98,13 @@ function encryptIngredientes(finalIngredientesArray) {
                 ? 3
                 : 0
 
-            return `(${finalIngrediente.id})[${tipoAddNumber}]`
-        })
-        .join(',')
-
-    return finalIngredientesString
-}
-
+                return `(${finalIngrediente.id})[${tipoAddNumber}]`
+            })
+            .join(',')
+            
+            return finalIngredientesString
+        }
+        
 async function decryptIngredientes(originalIngredientesString, finalIngredientesString) {
     const Arrayzer = str => String(str).replace(' ', '').split(',')
     const originalIngredientesArray = Arrayzer(originalIngredientesString)
@@ -113,7 +114,7 @@ async function decryptIngredientes(originalIngredientesString, finalIngredientes
         finalIngredientesArray.map(async finalIngrediente => {
             const id = finalIngrediente.match(/\(\d+\)/)[0].replace(/[^\d]/g, '')
 
-            let tipoAdd = finalIngrediente.replace(/[^\[0-9\]]/, '').replace(/[^0-9]/, '')
+            let tipoAdd = finalIngrediente.match(/\[+[0-9]+\]+/g, '').toString().replace(/[^0-9]/g, '')
 
             if (tipoAdd === '0' && !originalIngredientesArray.includes(id)) {
                 //COM
@@ -138,6 +139,7 @@ async function decryptIngredientes(originalIngredientesString, finalIngredientes
                 nome: ingr[0]?.nome,
                 tipoAdd: tipoAdd,
             }
+
             return _r
         })
     )
@@ -148,36 +150,42 @@ const infoToCheckBeforeUpdate = {
     valores: { pedidos: 0, total: 0, pago: 0, pendente: 0, taxas: 0, impressoes: 0 },
 }
 
+
+
 module.exports = {
     andamento: [],
-    andamentoClientes: [],
-    andamentoItens: [],
-    andamentoPagamentos: [],
 
+    
     async novoPedido(req, res) {
+        try{
+            const novo = await this._novoPedido({id: req.body?.cliente?.id, nome: req.body?.cliente?.nome})
+            res.send(novo)
+        }catch{
+            res.send(null)
+        }
+    },
+
+    async _novoPedido(cliente){
         const pool = await db.pool
         let conn
 
         let data = [
-            req.body?.cliente?.id || null,
-            req.body?.cliente?.nome || null
+            cliente?.id || null,
+            cliente?.nome || null
         ]
         try {
             conn = await pool.getConnection()
             const e = await conn.query(`insert into tbl_ped (cli_id, cli_nome) values (?,?)`, data)
             if (e) {
-                if (res) {
-                    this.refreshAndamento()
-                    const novos = await this._getPedidos({ids: [e.insertId]})
-                    res.send(novos[0])
-                } else {
-                    conn.end()
-                    res.send(null)
-                    return e
-                }
+                this.refreshAndamento()
+                const novos = await this._getPedidos({ids: [e.insertId]})
+                return novos[0]
+            }else{
+                throw new Error('Erro ao inserir')
             }
         } catch (err) {
             console.error(err, err.stack)
+            return null
         } finally {
             if (conn) conn.end()
         }
@@ -187,6 +195,51 @@ module.exports = {
         res.send(infoToCheckBeforeUpdate)
     },
 
+    async checkUpdate(req, res){
+        const {pedidos} = req.body
+        if(pedidos && Array.isArray(pedidos)){
+
+            //CHECA O GERAL DE TODOS OS PEDIDOS
+            const getTotal = (peds) => peds.reduce((max, current) => max + (Number(current.valor) ?? 0), 0)
+            const getItens = (peds) => peds.reduce((max, current) => max + (current.itens?.length ?? 0), 0)
+            let diffs = [
+                pedidos.length !== this.andamento.length,
+                getTotal(pedidos) !== getTotal(this.andamento),
+                getItens(pedidos) !== getItens(this.andamento)    
+            ]
+
+            if(diffs.some(e => e)){
+                res.send(true)
+                return
+            }
+            
+            //CHECA PEDIDO POR PEDIDO
+            for(let p of pedidos){
+                const orig = this.andamento.find(e => equals(e.id, p.id))
+                diffs = [
+                    !orig,
+                    orig?.valor !== p.valor,
+                    orig?.endereco?.taxa !== p?.endereco?.taxa,
+                    orig?.endereco?.cep !== p?.endereco?.cep,
+                    orig?.cliente?.id !== p?.cliente?.id,
+                    orig?.cliente?.nome !== p?.cliente?.nome,
+                    getValorPago(orig) !== getValorPago(p),
+                    getValorPagamentos(orig) !== getValorPagamentos(p),
+                    orig?.impr !== p.impr
+                ]
+                if(diffs.some(e => e)){
+                        res.send(true)
+                        return
+                    }
+                    
+                }
+
+            res.send(false)
+        }else{
+            res.sendStatus(400)
+        }
+    },
+
     async refreshAndamento(){
         const res = await this._getPedidos({status: ['ANDAMENTO']})
         this.andamento = res
@@ -194,17 +247,7 @@ module.exports = {
     },
 
     getAndamento(req, res) {
-        // const tipo = req?.query?.tipoGet
-        // const id = req?.query?.pedidoId || req?.query?.clienteId
-        // if (tipo && tipo === 'cliente' && id) {
-        //     res.send(this.andamentoClientes.filter(e => e.id === Number(id)))
-        // } else if (tipo && tipo === 'itens' && id) {
-        //     res.send(this.andamentoItens.filter(e => e.pedidoId === Number(id)))
-        // } else if (tipo && tipo === 'pagamentos' && id) {
-        //     res.send(this.andamentoPagamentos.filter(e => e.pedidoId === Number(id)))
-        // } else {
             res.send(this.andamento)
-        // }
     },
 
     async getRelatorios(req, res) {
@@ -258,31 +301,31 @@ module.exports = {
             let result = []
             try {
                 conn = await pool.getConnection()
-                let rows = await conn.query(
-                    `SELECT 
-                    ped.ped_id, ped.cli_id, cli_nome, ped_tipo, 
-                    arq_id, arq_ate, 
-                    ped_data_inic, ped_data_fim, 
-                    end_cep, end_log, end_comp, 
-                    bai_id, bai_desc, bai_taxa, 
-                    ponto_desc, ponto_n, 
-                    ponto_ref, ped_taxa, 
-                    entreg_id, entreg_nome, 
-                    pedloc_saida, ped_valor, 
-                    ped_status, ped_impr, ped_obs, 
-                    coalesce(sum(item_valor),0) + COALESCE(pl.ped_taxa,0) as total 
-                    from tbl_ped as ped 
-                    left join tbl_ped_itens using(ped_id) 
-                    left join tbl_ped_app using(ped_id) 
-                    left join (tbl_ped_loc as pl 
-                    inner join (tbl_cad_loc_end as loc inner join tbl_cad_loc_bairros as bai using(bai_id)) 
-                    using(end_cep) 
-                    left join tbl_cad_entreg as entreg using(entreg_id)) 
-                    using(ped_id) 
-                    left join tbl_ped_arq as arq using(ped_id) 
-                    where ${where.join(' AND ')} 
-                    group by ped_id limit 1000`
-                )
+                let str = 
+                `SELECT 
+                ped.ped_id, ped.cli_id, cli_nome, ped_tipo, 
+                arq_id, arq_ate, 
+                ped_data_inic, ped_data_fim, 
+                end_cep, end_log, end_comp, 
+                bai_id, bai_desc, bai_taxa, 
+                ponto_desc, ponto_n, 
+                ponto_ref, ped_taxa, 
+                entreg_id, entreg_nome, 
+                pedloc_saida, ped_valor, 
+                ped_status, ped_impr, ped_obs, 
+                coalesce(sum(item_valor),0) + COALESCE(pl.ped_taxa,0) as total 
+                from tbl_ped as ped 
+                left join tbl_ped_itens using(ped_id) 
+                left join tbl_ped_app using(ped_id) 
+                left join (tbl_ped_loc as pl 
+                inner join (tbl_cad_loc_end as loc inner join tbl_cad_loc_bairros as bai using(bai_id)) 
+                using(end_cep) 
+                left join tbl_cad_entreg as entreg using(entreg_id)) 
+                using(ped_id) 
+                left join tbl_ped_arq as arq using(ped_id) 
+                where ${where.join(' AND ')} 
+                group by ped_id limit 1000`
+                let rows = await conn.query(str)
 
                 result = await Promise.all(
                     rows.map(async e => {
@@ -471,20 +514,44 @@ module.exports = {
     },
 
     async updateCliente(req, res) {
-        const novoCliente = req.body.novoCliente
-        let pedido =
-            !req.body.pedido.id || req.body.pedido.id === 0 || req.body.pedido.id === ''
-                ? await this.novoPedido()
-                : req.body.pedido
+        try {
 
+            const novoCliente = req.body.novoCliente
+            
+            let pedido = req.body.pedido > 0 
+            ? await this._novoPedido() : req.body.pedido
+            
+            if(['CAIXA', 'ENTREGA', 'APLICATIVO'].every(e => e !== pedido.tipo)) throw new Error('BadRequest')
+            
+            pedido = await this._updateCliente(pedido, novoCliente) 
+            
+            await this.refreshAndamento()
+            
+            pedido = this.andamento.find(a => a.id === pedido.id)
+            
+            res.send(pedido)
+
+        } catch (err) {
+            res.sendStatus(403)
+            console.error(err, err.stack)
+        }
+    },
+
+    async _updateCliente(pedido, novoCliente) {
         const pool = await db.pool
         let conn
         try {
             conn = await pool.getConnection()
 
-            let data = [novoCliente.id || null, novoCliente.nome || null]
-            const e = await conn.query('UPDATE tbl_ped set cli_id=?, cli_nome=? ' + `where ped_id = ${pedido.id}`, data)
 
+            let data = [
+                novoCliente.id || null, 
+                novoCliente.nome || null
+            ]
+
+            const e = await conn.query('UPDATE tbl_ped set cli_id=?, cli_nome=? ' + `where ped_id = ${pedido.id}`, data)
+            
+            if(!e.affectedRows) throw new Error('BadGateway')
             pedido.cliente = novoCliente
 
             if (!novoCliente.id && !novoCliente.nome) {
@@ -497,13 +564,12 @@ module.exports = {
             } else if (!novoCliente.id) {
                 pedido = await this._updateTipo(pedido, 4)
             }
-            await this.refreshAndamento()
-            const novoPedido = this.andamento.find(a => a.id === pedido.id)
-            res.send(novoPedido)
+            return pedido
         } catch (err) {
             console.error(err, err.stack)
+            return null
         } finally {
-            if (conn) return conn.end()
+            if (conn) conn.end()
         }
     },
 
@@ -521,19 +587,18 @@ module.exports = {
         const pool = await db.pool
         let conn
         try {
+            novoTipo = (typeof novoTipo === 'string') ? getTipoNum(novoTipo) : novoTipo
             let data = [novoTipo]
             conn = await pool.getConnection()
             const e = await conn.query('UPDATE tbl_ped set ped_tipo=? ' + `where ped_id = ${pedido.id}`, data)
 
             conn.release()
             await conn.query('delete from tbl_ped_app ' + `WHERE ped_id = ${pedido.id}`)
-
             let novoEndereco = null
-
             if (novoTipo === 1) {
                 novoEndereco = await _getEndereco(pedido.cliente)
             }
-
+            
             pedido.tipo = getTipo(novoTipo)
             pedido = await this._updateEndereco(pedido, novoEndereco)
             pedido = await this._updateAplicativo(pedido, null)
@@ -551,7 +616,7 @@ module.exports = {
         if (pedido && novoEndereco) {
             let novoPedido = await this._updateEndereco(pedido, novoEndereco)
             await this.refreshAndamento()
-            res.send(this.andamento.filter(a => a.id === novoPedido.id)[0])
+            res.send(this.andamento.find(a => a.id === novoPedido.id))
         }
     },
 
@@ -561,9 +626,8 @@ module.exports = {
         try {
             conn = await pool.getConnection()
             await conn.query('delete from tbl_ped_loc ' + `WHERE ped_id = ${pedido.id}`)
-
             if (novoEndereco) {
-                novoEndereco.taxa = novoEndereco?.bairro?.taxa ?? 0
+                novoEndereco.taxa = novoEndereco?.taxa ?? novoEndereco?.bairro?.taxa ?? 0
                 novoEndereco.entregador = pedido?.endereco?.entregador ?? (await _getPadrao())
                 let data = [
                     pedido.id || null,
@@ -598,8 +662,12 @@ module.exports = {
         const novaTaxa = req.body?.novaTaxa
         if (pedido && Number(novaTaxa) >= 0) {
             let r = await this._updateTaxa(pedido, novaTaxa)
-            res.send(r)
-            r && (await this.refreshAndamento())
+            if(r){
+                await this.refreshAndamento()
+                res.send(this.andamento.find(e => e.id === pedido.id))
+            }else{
+                res.sendStatus(400)
+            }
         }
     },
 
@@ -614,6 +682,50 @@ module.exports = {
         } catch (err) {
             console.error(err, err.stack)
             return false
+        } finally {
+            if (conn) conn.end()
+        }
+    },
+
+    async duplicar(req, res) {
+        try{
+            const { pedido } = req.body
+            let r = await this._duplicar(pedido)
+            if(!r) throw new Error('BadGateway')
+            await this.refreshAndamento()
+            res.send(this.andamento.find(e => e.id === r.id))
+        }catch(err){
+            if(err.message === 'BadGateway'){
+                res.sendStatus(503)
+            }else if(err.message === 'BadRequest'){
+                res.sendStatus(403)
+            }else{
+                res.sendStatus(500)
+            }
+
+        }
+    },
+
+    async _duplicar(pedido) {
+        const pool = await db.pool
+        let conn
+        let data = []
+        try {
+            conn = await pool.getConnection()
+            const original = (await this._getPedidos({ids: [pedido.id]}))[0]
+            let novoPedido = await this._novoPedido()
+            novoPedido = await this._updateCliente(novoPedido, original.cliente)
+            novoPedido = await this._updateEndereco(novoPedido, original.endereco)
+            novoPedido = await this._updateObservacoes(novoPedido, novoPedido.observacoes)
+            
+            // await Promise.all(
+                // original.itens.map(async (e) => {novoPedido = await this._updateItem(novoPedido, {...e, id: null})})
+                original.itens.map((e) => this._updateItem(novoPedido, {...e, id: null}).then(e => novoPedido = e))
+            // )
+            return novoPedido
+        } catch (err) {
+            console.error(err, err.stack)
+            return null
         } finally {
             if (conn) conn.end()
         }
@@ -764,9 +876,10 @@ module.exports = {
                         await conn.query('delete from tbl_ped_itens_ps ' + `where item_id = '${novoItem.id}'`)
 
                         for (let sabor of novoItem.pizza.sabores) {
+                            const saborId = Number(String(sabor.id).split('s')[0])
                             data = [
                                 novoItem.id || null,
-                                sabor.id || null,
+                                saborId || null,
                                 sabor.tipo.id || null,
                                 sabor.nome,
                                 encryptIngredientes(sabor.ingredientes),
@@ -939,13 +1052,17 @@ module.exports = {
                     pagamentoAntigo?.id > 0 &&
                     (novosPagamentos.length !== 1 || pagamentoAntigo.id !== novosPagamentos[0]?.id)
                 ) {
+
                     const str = `DELETE FROM tbl_ped_pag 
                         WHERE pag_id = ${pagamentoAntigo.id}`
                     await conn.query(str)
+
                 } else if (!pagamentoAntigo) {
+
                     const str = `DELETE FROM tbl_ped_pag 
                         WHERE ped_id = ${pedido.id}`
                     await conn.query(str)
+
                 } else {
                     const novoPagamento = novosPagamentos[0]
                     let data = [
@@ -956,17 +1073,17 @@ module.exports = {
                         novoPagamento.valorRecebido,
                         novoPagamento.status,
                     ]
-
+                    
                     const str = `UPDATE tbl_ped_pag SET 
-                            ped_id=?, pag_dr=?, pag_tipo=?, pag_valor=?, 
-                            pag_recebido=?, pag_status=? 
-                            WHERE pag_id = ${pagamentoAntigo.id}`
-
+                    ped_id=?, pag_dr=?, pag_tipo=?, pag_valor=?, 
+                    pag_recebido=?, pag_status=? 
+                    WHERE pag_id = ${pagamentoAntigo.id}`
+                    
                     await conn.query(str, data)
-
+                    
                     return
                 }
-
+                
                 for (let novoPagamento of novosPagamentos) {
                     let data = [
                         pedido.id || null,
@@ -1018,11 +1135,12 @@ module.exports = {
                 const str = `UPDATE tbl_ped SET ped_obs=? WHERE ped_id = ${pedido.id}`
 
                 await conn.query(str, data)
+                pedido.observacoes = String(novoObservacoes).toUpperCase()
             } catch (err) {
                 console.error(err, err.stack)
             } finally {
                 if (conn) conn.end()
-                return String(novoObservacoes).toUpperCase()
+                return pedido
             }
         }
     },
@@ -1107,11 +1225,15 @@ module.exports = {
             let conn
 
             conn = await pool.getConnection()
-
+            const valorPago = getValorPago(pedido)
             let data = [
                 new Date(),
                 getTipoNum(pedido.tipo),
-                'FINALIZADO',
+                valorPago === pedido.valor 
+                ? 'FINALIZADO' 
+                : valorPago < pedido.valor 
+                ? 'PENDENTE'
+                : null,
             ]
 
             let str = `UPDATE tbl_ped SET 
@@ -1126,12 +1248,12 @@ module.exports = {
             await this.refreshAndamento()
             res.sendStatus(200)
         } catch (err) {
-            console.error(err, err.stack)
             if (err.message.includes('BadRequest')) {
                 res.sendStatus(403)
             } else {
                 res.sendStatus(500)
             }
+            console.error(err, err.stack)
         }
     },
 }

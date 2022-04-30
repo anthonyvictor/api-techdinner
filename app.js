@@ -18,7 +18,9 @@ testDbConnection().then((k) => {
     app.use(routes)    
 }).catch(err => {
     app.get('/*', (req, res) => {
-        res.send(`Falha no servidor! ${err.message} ${err.stack}`)
+        // res.send(`${err} ${err.stack}`)
+        console.error(err, err.stack)
+        res.send(`Falha no servidor!`)
     })
 }).finally(() => {    
     const {localUrl, staticUrl, port} = getUrls()

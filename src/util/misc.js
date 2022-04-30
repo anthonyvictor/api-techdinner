@@ -1,6 +1,7 @@
 const db = require('../database')
 const app = require('../../app')
 const fs = require('fs')
+const { json } = require('express/lib/response')
 require('dotenv/config')
 // const path = require('path')
 
@@ -68,6 +69,10 @@ module.exports = {
                 // console.log(name, buffer)
             
         }
+    },
+
+    equals(a, b){
+        return JSON.stringify(a) === JSON.stringify(b)
     },
 
     getUrls: getUrls, getImageUrl: getImageUrl

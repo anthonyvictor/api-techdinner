@@ -44,7 +44,7 @@ module.exports = {
         let data = req.headers.authorization.split(' ')[1];
         let buff = Buffer.from(data, 'base64');
         let text = buff.toString('utf-8');
-        const user = text.split(':')[0].toLowerCase()
+        const user = text.split(':')[0].toLowerCase().trim()
         const password = text.split(':')[1]
         if(user !=='' && password !==''){
             const found = users.find(u => (
