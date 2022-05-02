@@ -1320,7 +1320,7 @@ module.exports = {
             conn = await pool.getConnection()
             const res = await conn.query(`
                 DELETE FROM tbl_ped_arq WHERE ped_id = ${pedido.id}
-            `, data)
+            `)
             return pedido
         } catch (err) {
             console.error(err, err.stack)
