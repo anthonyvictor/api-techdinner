@@ -17,7 +17,6 @@ module.exports = {
         bordas: this.bordas
     })},
 
-
     async _getTipos(min) {
         const minId = min 
         ? `where tipo_id > ${min} ` : '' 
@@ -122,6 +121,28 @@ module.exports = {
             }
         }
     },
+
+    async getTamanhos(req, res) {
+        await this._getTamanhos()
+        res.send(this.tamanhos)
+    },
+    async getSabores(req, res) {
+        await this._getSabores()
+        res.send(this.sabores)
+    },
+    async getIngredientes(req, res) {
+        await this._getIngredientes()
+        res.send(this.ingredientes)
+    },
+    async getValores(req, res) {
+        await this._getValores()
+        res.send(this.valores)
+    },
+    async getBordas(req, res) {
+        await this._getBordas()
+        res.send(this.bordas)
+    },
+
     async _getTamanhos(min) {
         const minId = min 
         ? `where tam_id > ${min} ` : '' 
@@ -279,6 +300,63 @@ module.exports = {
         } finally {
             if (conn) return conn.end();
         }
-    }
+    },
+
+    async saveTamanho(req, res){
+        let conn;
+        try {
+            const {tamanho} = req.body
+            let id = tamanho.id
+            const pool = await db.pool
+            if(tamanho.valores.length < this.tipos.length) throw new Error('Os tipos não foram preenchidos com os valores deste tamanho')
+            conn = await pool.getConnection();
+
+            let data = [
+                (tamanho.nome || null),
+                (tamanho.ativo),
+                (tamanho.visivel)
+            ]
+            let str = id
+            ? `UPDATE tbl_cad_pz_tam set 
+            tam_desc=?, tam_ativo=?, tam_visivel=? 
+            where tam_id = ${id}`
+
+            : `INSERT INTO tbl_cad_pz_tam 
+            (tam_desc, tam_ativo, tam_visivel) 
+            VALUES (?,?,?)`
+
+            const e = await conn.query(str, data)
+            if(e) {
+                id = e.insertId > 0 ? e.insertId : id
+
+                if(e.affectedRows > 0){
+
+                    await conn.query(`DELETE FROM tbl_cad_pz_valores WHERE tam_id = ${id}`)
+
+                    for(let valor of tamanho.valores){
+                        data = [
+                            id,
+                            valor.tipo.id,
+                            valor.valor
+                        ]
+                        await conn.query(`INSERT INTO tbl_cad_pz_valores (tam_id, tipo_id, valor) values (?,?,?)`, data)
+                    }
+
+                    this.tamanhos = [
+                        ...this.tamanhos.filter(e => e.id !== id),
+                        {...tamanho, id: id}
+                    ]
+                }
+                res.send({...tamanho, id: id})
+            }else{
+                throw new Error(e)
+            }
+        } catch (err) {
+            console.error(err, err.stack)
+            res.sendStatus(500)
+        } finally {
+            if (conn) return conn.end();
+        }
+    },
 
 }

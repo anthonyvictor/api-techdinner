@@ -22,7 +22,13 @@ router.get('/enderecos', (req, res) => enderecosController.getAll(req, res))
 router.get('/taxa', (req, res) => enderecosController.getTaxaOriginal(req, res))
 
 router.get('/pizzas', (req, res) => pizzasController.getAll(req, res))
+router.get('/pizzas/sabores', (req, res) => pizzasController.getSabores(req, res))
+router.get('/pizzas/tamanhos', (req, res) => pizzasController.getTamanhos(req, res))
+router.get('/pizzas/ingredientes', (req, res) => pizzasController.getIngredientes(req, res))
+router.get('/pizzas/valores', (req, res) => pizzasController.getValores(req, res))
+router.get('/pizzas/bordas', (req, res) => pizzasController.getBordas(req, res))
 router.post('/pizzas/salvar/sabor', (req, res) => pizzasController.saveSabor(req, res))
+router.post('/pizzas/salvar/tamanho', (req, res) => pizzasController.saveTamanho(req, res))
 
 router.get('/bebidas', (req, res) => bebidasController.getAll(req, res))
 router.post('/bebidas/salvar', (req, res) => bebidasController.save(req, res))
