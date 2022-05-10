@@ -75,5 +75,20 @@ module.exports = {
         return JSON.stringify(a) === JSON.stringify(b)
     },
 
-    getUrls: getUrls, getImageUrl: getImageUrl
+    getUrls: getUrls, getImageUrl: getImageUrl,
+
+    isNEU (val) {
+        return (
+          // assim, nós também podemos verificar valores undefined. null == undefined = true
+          // nós queremos que {} retorne false. não podemos usar !! porque !!{} retorna true
+          // !!{} = true and !!{name:"yilmaz"} = true. !! não funciona com objetos
+          !val ||
+          val === null ||
+          val === "" ||
+          val === 'null' ||
+          (Array.isArray(val) && val.length === 0) ||
+          (typeof(val) === 'object' && Object.keys(val).length === 0)
+      
+        );
+      }
 }

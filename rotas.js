@@ -49,6 +49,7 @@ router.post('/pedidos/update/item', (req,res) => pedidosController.updateItem(re
 router.post('/pedidos/update/item/copy', (req,res) => pedidosController.copyItem(req, res))
 router.delete('/pedidos/update/item/delete', (req,res) => pedidosController.deleteItem(req, res))
 router.post('/pedidos/update/pagamento', (req,res) => pedidosController.updatePagamento(req, res))
+router.post('/pedidos/update/impressoes', (req,res) => pedidosController.updateImpressoes(req, res))
 router.post('/pedidos/duplicar', (req,res) => pedidosController.duplicar(req, res))
 router.post('/pedidos/arquivar', (req,res) => pedidosController.arquivar(req, res))
 router.post('/pedidos/desarquivar', (req,res) => pedidosController.desarquivar(req, res))

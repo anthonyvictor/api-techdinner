@@ -1,5 +1,5 @@
 const db = require('../database')
-const { equals } = require('../util/misc')
+const { equals, isNEU } = require('../util/misc')
 const clientesController = require('./clientesController')
 const { _getEndereco, getImages, _getImages } = require('./clientesController')
 const { _getPadrao } = require('./entregadoresController')
@@ -517,12 +517,13 @@ module.exports = {
     async updateCliente(req, res) {
         try {
 
-            const novoCliente = req.body.novoCliente
+            const {novoCliente} = req.body
+
+            let {pedido} = req.body
+            // ? await this._novoPedido() : req.body.pedido
             
-            let pedido = req.body.pedido > 0 
-            ? await this._novoPedido() : req.body.pedido
-            
-            if(['CAIXA', 'ENTREGA', 'APLICATIVO'].every(e => e !== pedido.tipo)) throw new Error('BadRequest')
+            // if(['CAIXA', 'ENTREGA', 'APLICATIVO']
+            // .every(e => e !== pedido.tipo)) throw new Error('BadRequest')
             
             pedido = await this._updateCliente(pedido, novoCliente) 
             
@@ -557,7 +558,7 @@ module.exports = {
 
             if (!novoCliente.id && !novoCliente.nome) {
                 pedido = await this._updateTipo(pedido, 4)
-            } else if (pedido.tipo === null || pedido.tipo === 'TIPO') {
+            } else if (pedido.tipo === null || pedido.tipo === 'TIPO' || (!novoCliente.id && novoCliente.nome)) {
                 const novoTipo = await this.getCostumeTipo(pedido.cliente)
                 pedido = await this._updateTipo(pedido, novoTipo)
             } else if (pedido.tipo === 'ENTREGA' && novoCliente.id) {
@@ -766,6 +767,8 @@ module.exports = {
         const pool = await db.pool
         let conn
         let result = 4
+        console.log('id:', typeof cliente.id, cliente.id, 'nome', cliente.nome)
+        if (isNEU(cliente.id) && cliente.nome !== '') return 0
         try {
             conn = await pool.getConnection()
             const rows = await conn.query(
@@ -1065,6 +1068,38 @@ module.exports = {
             } finally {
                 if (conn) conn.end()
                 return pedido
+            }
+        }
+    },
+    async updateImpressoes(req, res) {
+        try {
+            const { pedido } = req.body
+            await this._updateImpressoes(pedido)
+            this.andamento[this.andamento.findIndex(e => e.id === pedido.id)].impr += 1
+            res.sendStatus(200)
+        } catch (err) {
+            console.error(err, err.stack)
+            res.sendStatus(500)
+        }
+    },
+
+    async _updateImpressoes(pedido) {
+        if (pedido) {
+            const pool = await db.pool
+            let conn
+            try {
+                conn = await pool.getConnection()
+                    
+                    const str = `UPDATE tbl_ped SET 
+                    ped_impr = ped_impr + 1 
+                    WHERE ped_id = ${pedido.id}`
+                    
+                    await conn.query(str)
+                    
+            } catch (err) {
+                console.error(err, err.stack)
+            } finally {
+                if (conn) conn.end()
             }
         }
     },
