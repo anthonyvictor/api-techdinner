@@ -87,7 +87,7 @@ module.exports = {
         const adminAuth = authController.isAdmin(user)
         if(adminAuth === false) throw new Error('You doesnt have permission for that!')
         if(adminAuth !== true) throw new Error(adminAuth)
-    }
+    },
 
 
     async _getAll(min) {
