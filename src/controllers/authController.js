@@ -64,6 +64,32 @@ module.exports = {
 
     },
 
+    isDev(username){
+            const user = users.find(u => u.username === username)
+            return (user?.post ?? '') === 'dev'
+    },
+
+    isAdmin(username){
+        try{
+            const found = users.filter(u => u.username === username)
+            const user = found[0]
+            return (user.post === 'admin') || this.isDev(username)
+        }catch(err){
+            return 'User does not exists'
+        }
+    },
+
+    authAdmin(req){
+        let data = req.headers.authorization.split(' ')[1];
+        let buff = Buffer.from(data, 'base64');
+        let text = buff.toString('utf-8');
+        const user = text.split(':')[0].toLowerCase().trim()
+        const adminAuth = authController.isAdmin(user)
+        if(adminAuth === false) throw new Error('You doesnt have permission for that!')
+        if(adminAuth !== true) throw new Error(adminAuth)
+    }
+
+
     async _getAll(min) {
         // const minId = min 
         // ? `where bebida_id > ${min} ` : '' 

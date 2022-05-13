@@ -1,40 +1,10 @@
 const db = require('../database')
+const { formatDateIso } = require('../util/format')
 const { equals, isNEU } = require('../util/misc')
 const clientesController = require('./clientesController')
 const { _getEndereco, getImages, _getImages } = require('./clientesController')
 const { _getPadrao } = require('./entregadoresController')
 const { _getIngredientes } = require('./pizzasController')
-
-function getDataInic(d){
-    const r = new Date(d)
-    r.setHours(5,0,0)
-    return formatDate(r)
-}
-function getDataFim(d){
-    const r = new Date(d)
-    r.setDate(r.getDate() + 1)
-    r.setHours(4,59,59)
-    return formatDate(r)
-}
-
-function today(){
-    const data = new Date()
-
-        const dataOntem = data
-        dataOntem.setDate(data.getDate() - 1)
-
-    let dataInic = null, 
-            dataFim = null
-         
-        if(data.getHours() < 5){
-            dataInic = getDataInic(dataOntem) // = dataOntem
-            dataFim = getDataFim(dataOntem) // = dataHoje
-        }else{
-            dataInic = getDataInic(data)
-            dataFim = getDataFim(data)
-        }
-        return { dataInic, dataFim }
-}
 
 function formatDate(d){
     return `${
@@ -66,8 +36,8 @@ function getValorPago(pedido){
     ?.filter(e => e.status === 1)
     ?.reduce((a,b) => a + b.valorPago, 0) || 0
     return res
-  }
-  
+}
+
 
 function getItemDescricao(item) {
     if (item.tipo === 0) {
@@ -86,36 +56,36 @@ function getItemDescricao(item) {
 
 function encryptIngredientes(finalIngredientesArray) {
     const finalIngredientesString = finalIngredientesArray
-        .map(finalIngrediente => {
-            const currentTipoAdd = String(finalIngrediente.tipoAdd).toUpperCase()
-            const tipoAddNumber = [0, '0', 'COM'].includes(currentTipoAdd)
-                ? 0
-                : [1, '1', 'SEM'].includes(currentTipoAdd)
-                ? 1
-                : [2, '2', 'POUCO'].includes(currentTipoAdd)
-                ? 2
-                : [3, '3', 'BASTANTE'].includes(currentTipoAdd)
-                ? 3
-                : 0
-
-                return `(${finalIngrediente.id})[${tipoAddNumber}]`
-            })
-            .join(',')
-            
-            return finalIngredientesString
-        }
+    .map(finalIngrediente => {
+        const currentTipoAdd = String(finalIngrediente.tipoAdd).toUpperCase()
+        const tipoAddNumber = [0, '0', 'COM'].includes(currentTipoAdd)
+        ? 0
+        : [1, '1', 'SEM'].includes(currentTipoAdd)
+        ? 1
+        : [2, '2', 'POUCO'].includes(currentTipoAdd)
+        ? 2
+        : [3, '3', 'BASTANTE'].includes(currentTipoAdd)
+        ? 3
+        : 0
         
+        return `(${finalIngrediente.id})[${tipoAddNumber}]`
+    })
+    .join(',')
+    
+    return finalIngredientesString
+}
+
 async function decryptIngredientes(originalIngredientesString, finalIngredientesString) {
     const Arrayzer = str => String(str).replace(' ', '').split(',')
     const originalIngredientesArray = Arrayzer(originalIngredientesString)
     const finalIngredientesArray = Arrayzer(finalIngredientesString)
-
+    
     return await Promise.all(
         finalIngredientesArray.map(async finalIngrediente => {
             const id = finalIngrediente.match(/\(\d+\)/)[0].replace(/[^\d]/g, '')
-
+            
             let tipoAdd = finalIngrediente.match(/\[+[0-9]+\]+/g, '').toString().replace(/[^0-9]/g, '')
-
+            
             if (tipoAdd === '0' && !originalIngredientesArray.includes(id)) {
                 //COM
                 tipoAdd = 'COM'
@@ -131,28 +101,26 @@ async function decryptIngredientes(originalIngredientesString, finalIngredientes
             } else {
                 tipoAdd = null
             }
-
+            
             const ingr = !isNaN(id) ? await _getIngredientes(null, id) : []
-
+            
             let _r = {
                 id: id,
                 nome: ingr[0]?.nome,
                 tipoAdd: tipoAdd,
             }
-
+            
             return _r
         })
-    )
-}
-
-const infoToCheckBeforeUpdate = {
-    clientes: [{ pedidoId: 0, cliente: { id: 0, nome: 0 } }],
-    valores: { pedidos: 0, total: 0, pago: 0, pendente: 0, taxas: 0, impressoes: 0 },
-}
-
-
-
-module.exports = {
+        )
+    }
+    
+    const infoToCheckBeforeUpdate = {
+        clientes: [{ pedidoId: 0, cliente: { id: 0, nome: 0 } }],
+        valores: { pedidos: 0, total: 0, pago: 0, pendente: 0, taxas: 0, impressoes: 0 },
+    }
+    
+    module.exports = {
     andamento: [],
 
     
@@ -203,20 +171,25 @@ module.exports = {
             //CHECA O GERAL DE TODOS OS PEDIDOS
             const getTotal = (peds) => peds.reduce((max, current) => max + (Number(current.valor) ?? 0), 0)
             const getItens = (peds) => peds.reduce((max, current) => max + (current.itens?.length ?? 0), 0)
+            
+            const pedidosLengthDiff = pedidos.length !== this.andamento.length
             let diffs = [
-                pedidos.length !== this.andamento.length,
+                pedidosLengthDiff,
                 getTotal(pedidos) !== getTotal(this.andamento),
                 getItens(pedidos) !== getItens(this.andamento)    
             ]
 
             if(diffs.some(e => e)){
-                res.send(true)
+                res.send({willUpdate: true})
                 return
             }
             
             //CHECA PEDIDO POR PEDIDO
             for(let p of pedidos){
                 const orig = this.andamento.find(e => equals(e.id, p.id))
+
+                const arqDiff = orig?.arq?.id !== p?.arq?.id
+
                 diffs = [
                     !orig,
                     orig?.valor !== p.valor,
@@ -226,10 +199,11 @@ module.exports = {
                     orig?.cliente?.nome !== p?.cliente?.nome,
                     getValorPago(orig) !== getValorPago(p),
                     getValorPagamentos(orig) !== getValorPagamentos(p),
-                    orig?.impr !== p.impr
+                    orig?.impr !== p.impr,
+                    arqDiff
                 ]
                 if(diffs.some(e => e)){
-                        res.send(true)
+                        res.send({willUpdate: true, arqDiff: arqDiff})
                         return
                     }
                     
@@ -251,30 +225,6 @@ module.exports = {
             res.send(this.andamento)
     },
 
-    async getRelatorios(req, res) {
-        const {ids, tipos, periodos, status} = req.query
-        const _periodos = periodos && periodos?.length > 0 
-        ? periodos.map(e => {
-            const pe = JSON.parse(e)
-            return {
-            dataInic: getDataInic(pe.dataInic), 
-            dataFim: getDataFim(pe.dataFim)
-        }})
-        : [today()]
-
-        const _status = status ?? ['FINALIZADO', 'PENDENTE', 'CANCELADO', 1, 2, 3]
-
-        const r = await this._getPedidos(
-            {
-                ids, tipos, 
-                periodos: _periodos,
-                status: _status
-            }
-        )
-
-        res.send(r)
-    },
-
     async _getPedidos({ids, tipos, periodos, status}) {
         if(ids?.length > 0 || tipos?.length > 0 || status?.length > 0 || periodos?.length > 0){
             const where = []
@@ -283,19 +233,17 @@ module.exports = {
             if(tipos?.length > 0) where.push(`ped_tipo in (${tipos.join()})`)
 
             if(status?.length > 0) where.push(`ped_status in (${status.filter(Boolean).map(e => isNaN(e) ? `'${e}'` : e).join()})`)
-
             if(periodos?.length > 0) periodos.forEach((periodo, i) => 
-                where.push(`${
-                    i === 0 ? '(' : ' OR '
-                }(ped_data_inic >= '${
-                    (periodo.dataInic)
-                }' AND ped_data_inic <= '${
-                    (periodo.dataFim)
-                }')${
-                    i === periodos.length - 1 && ')'
-                }`)
+            where.push(`${
+                i === 0 ? '(' : ' OR '
+            }(ped_data_inic >= '${
+                (periodo.dataInic)
+            }' AND ped_data_inic <= '${
+                (periodo.dataFim)
+            }')${
+                i === periodos.length - 1 && ')'
+            }`)
             )
-
             
             const pool = await db.pool
             let conn
@@ -347,7 +295,7 @@ module.exports = {
                             dataInic: e.ped_data_inic,
                             dataFim: e.ped_data_fim,
                             cliente: cliente,
-                            endereco: e.end_cep
+                            endereco: e.end_cep && tipo === 'ENTREGA'
                                 ? {
                                     cep: e.end_cep,
                                     logradouro: e.end_log,
@@ -767,7 +715,6 @@ module.exports = {
         const pool = await db.pool
         let conn
         let result = 4
-        console.log('id:', typeof cliente.id, cliente.id, 'nome', cliente.nome)
         if (isNEU(cliente.id) && cliente.nome !== '') return 0
         try {
             conn = await pool.getConnection()
@@ -1251,6 +1198,7 @@ module.exports = {
             console.error(err, err.stack)
         }
     },
+
     async duplicar(req, res) {
         try{
             const { pedido } = req.body
@@ -1285,6 +1233,7 @@ module.exports = {
             return null
         }
     },
+
     async arquivar(req, res) {
         try{
             const { pedido, dataFim } = req.body
@@ -1304,7 +1253,7 @@ module.exports = {
     
         }
     },
-    
+
     async _arquivar(pedido, dataFim) {
         const pool = await db.pool
         let conn
@@ -1328,6 +1277,7 @@ module.exports = {
             if (conn) conn.end()
         }
     },
+
     async desarquivar(req, res) {
         try{
             const { pedido } = req.body
@@ -1364,4 +1314,25 @@ module.exports = {
             if (conn) conn.end()
         }
     },
+
+    async deleteArquivados(onError){
+        const pool = await db.pool
+        let conn
+        try {
+            conn = await pool.getConnection()
+            const e = await conn.query(`
+                DELETE FROM tbl_ped_arq 
+                WHERE arq_ate <= '${formatDateIso(new Date())}'`
+            )
+            if(e?.affectedRows ?? 0 > 0){
+                await this.refreshAndamento()
+            }
+        } catch (err) {
+            console.error(err, err.stack)
+            onError()
+        } finally {
+            if (conn) conn.end()
+        }
+    },
+
 }

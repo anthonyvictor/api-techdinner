@@ -170,10 +170,10 @@ module.exports = {
     },
 
     async delete(req, res) {
+        let conn
         try {
             const { id } = req.body
             const pool = await db.pool
-            let conn
             conn = await pool.getConnection()
             const e = await conn.query(`DELETE from tbl_cad_cli where cli_id = ${id}`)
 
