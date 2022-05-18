@@ -32,7 +32,9 @@ module.exports = {
                 ...this.clientes.filter(e => e.id === Number(req.query.id))[0],
             })
         } else {
-            res.send(this.clientes)
+            // const start = req?.query?.minId ?? 0
+            // const end = start + 20
+            res.send(this.clientes)//.slice(start, end))
         }
     },
     count: 0,

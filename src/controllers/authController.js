@@ -33,7 +33,7 @@ const users = [
             phoneNumber: '71988726927',
             address: 'Ladeira do Jardim Zoológico, 427B - Ondina, CEP: 40.170-720'
         },
-        post: 'dev', 
+        post: 'dev', //or role
         password: 'asenha159'
     },
 ]
